@@ -1,0 +1,254 @@
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../theme/app_theme.dart';
+
+class PatientDetailScreen extends StatefulWidget {
+  final String patientId;
+  final String patientName;
+  final String patientEmail;
+
+  const PatientDetailScreen({
+    super.key,
+    required this.patientId,
+    required this.patientName,
+    required this.patientEmail,
+  });
+
+  @override
+  State<PatientDetailScreen> createState() => _PatientDetailScreenState();
+}
+
+class _PatientDetailScreenState extends State<PatientDetailScreen> {
+  bool isLoading = true;
+  List<dynamic> symptomEntries = [];
+  List<dynamic> exerciseLogs = [];
+
+  @override
+  void initState() {
+    super.initState();
+    loadPatientData();
+  }
+
+  Future<void> loadPatientData() async {
+    final symptoms = await Supabase.instance.client
+        .from('symptom_diary_entries')
+        .select()
+        .eq('patient_id', widget.patientId)
+        .order('created_at', ascending: false);
+
+    final exercises = await Supabase.instance.client
+        .from('exercise_logs')
+        .select()
+        .eq('patient_id', widget.patientId)
+        .order('created_at', ascending: false);
+
+    setState(() {
+      symptomEntries = symptoms;
+      exerciseLogs = exercises;
+      isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final completedExercises =
+        exerciseLogs.where((log) => log['status'] == 'COMPLETED').length;
+
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: AppBar(
+        title: const Text('Expediente del paciente'),
+        backgroundColor: AppTheme.background,
+      ),
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                Text(
+                  widget.patientName,
+                  style: const TextStyle(
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  widget.patientEmail,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    color: AppTheme.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _SummaryCard(
+                        title: 'Síntomas',
+                        value: '${symptomEntries.length}',
+                        icon: Icons.favorite_outline,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _SummaryCard(
+                        title: 'Ejercicios',
+                        value: '$completedExercises',
+                        icon: Icons.task_alt,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 28),
+                const Text(
+                  'Síntomas recientes',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (symptomEntries.isEmpty)
+                  const Text(
+                    'Este paciente aún no tiene síntomas registrados.',
+                    style: TextStyle(color: AppTheme.textMuted),
+                  )
+                else
+                  ...symptomEntries.map((entry) {
+                    final List symptoms = entry['symptoms'] ?? [];
+                    final String date = entry['entry_date'] ?? '';
+                    final String notes = entry['notes'] ?? '';
+
+                    return _DataCard(
+                      title: date,
+                      subtitle: symptoms.join(', '),
+                      detail: notes,
+                    );
+                  }),
+                const SizedBox(height: 28),
+                const Text(
+                  'Ejercicios recientes',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textDark,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (exerciseLogs.isEmpty)
+                  const Text(
+                    'Este paciente aún no tiene ejercicios registrados.',
+                    style: TextStyle(color: AppTheme.textMuted),
+                  )
+                else
+                  ...exerciseLogs.map((log) {
+                    return _DataCard(
+                      title: log['exercise_name'] ?? 'Ejercicio',
+                      subtitle: 'Estado: ${log['status']}',
+                      detail: 'Inicio: ${log['started_at'] ?? ''}',
+                    );
+                  }),
+              ],
+            ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final IconData icon;
+
+  const _SummaryCard({
+    required this.title,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: AppTheme.primary),
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.primary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: const TextStyle(
+              color: AppTheme.textMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DataCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String detail;
+
+  const _DataCard({
+    required this.title,
+    required this.subtitle,
+    required this.detail,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppTheme.textDark,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: const TextStyle(color: AppTheme.textMuted),
+          ),
+          if (detail.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              detail,
+              style: const TextStyle(
+                color: AppTheme.textDark,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
